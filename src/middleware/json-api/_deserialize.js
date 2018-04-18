@@ -29,10 +29,6 @@ function collection (items, included, useCache = false) {
 }
 
 function resource (item, included, useCache = false) {
-  console.log('item:', item)
-  console.log('included:', included)
-  console.log('useCache:', useCache)
-
   if (useCache) {
     const cachedItem = cache.get(item.type, item.id)
     if (cachedItem) return cachedItem
@@ -70,11 +66,6 @@ function resource (item, included, useCache = false) {
       relConfig = model.attributes[rel]
     }
 
-    console.log('model:', model)
-    console.log('value:', value)
-    console.log('rel:', rel)
-    console.log('relConfig:', relConfig)
-
     if (_.isUndefined(relConfig)) {
       Logger.warn(`Resource response contains relationship "${rel}", but it is not present on model config and therefore not deserialized.`)
     } else if (!isRelationship(relConfig)) {
@@ -84,8 +75,6 @@ function resource (item, included, useCache = false) {
         attachRelationsFor.call(this, model, relConfig, item, included, key)
     }
   })
-
-  console.log('deserializedModel:', deserializedModel)
 
   var params = ['meta', 'links']
   params.forEach(function (param) {
@@ -101,14 +90,12 @@ function resource (item, included, useCache = false) {
 
 function attachRelationsFor (model, attribute, item, included, key) {
   let relation = null
-  console.log('model:', model, 'attribute:', attribute, 'item:', item, 'included:', included, 'key:', key)
   if (attribute.jsonApi === 'hasOne') {
     relation = attachHasOneFor.call(this, model, attribute, item, included, key)
   }
   if (attribute.jsonApi === 'hasMany') {
     relation = attachHasManyFor.call(this, model, attribute, item, included, key)
   }
-  console.log('relation:', relation)
   return relation
 }
 
@@ -118,7 +105,6 @@ function attachHasOneFor (model, attribute, item, included, key) {
   }
 
   let relatedItems = relatedItemsFor(model, attribute, item, included, key)
-  console.log('relatedItems:', relatedItems)
   if (relatedItems && relatedItems[0]) {
     return resource.call(this, relatedItems[0], included, true)
   } else {
@@ -146,9 +132,7 @@ function isRelationship (attribute) {
  *   Returns unserialized related items.
  */
 function relatedItemsFor (model, attribute, item, included, key) {
-  console.log('model:', model, 'attribute:', attribute, 'item:', item, 'included:', included, 'key:', key)
   let relationMap = _.get(item.relationships, [key, 'data'], false)
-  console.log('relationMap:', relationMap)
   if (!relationMap) {
     return []
   }
