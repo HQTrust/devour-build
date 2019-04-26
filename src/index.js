@@ -1,7 +1,21 @@
 const axios = require('axios')
 const pluralize = require('pluralize')
-const _ = require('lodash')
-const Promise = require('es6-promise').Promise
+// Import only what we use from lodash.
+const _isUndefined = require('lodash/isUndefined')
+const _isString = require('lodash/isString')
+const _isPlainObject = require('lodash/isPlainObject')
+const _isArray = require('lodash/isArray')
+const _defaultsDeep = require('lodash/defaultsDeep')
+const _forOwn = require('lodash/forOwn')
+const _clone = require('lodash/clone')
+const _get = require('lodash/get')
+const _set = require('lodash/set')
+const _hasIn = require('lodash/hasIn')
+const _last = require('lodash/last')
+const _map = require('lodash/map')
+const _findIndex = require('lodash/findIndex')
+
+require('es6-promise').polyfill()
 const deserialize = require('./middleware/json-api/_deserialize')
 const serialize = require('./middleware/json-api/_serialize')
 const Logger = require('./logger')
@@ -42,7 +56,7 @@ let jsonApiMiddleware = [
 class JsonApi {
 
   constructor (options = {}) {
-    if (!(arguments.length === 2 && _.isString(arguments[0]) && _.isArray(arguments[1])) && !(arguments.length === 1 && (_.isPlainObject(arguments[0]) || _.isString(arguments[0])))) {
+    if (!(arguments.length === 2 && _isString(arguments[0]) && _isArray(arguments[1])) && !(arguments.length === 1 && (_isPlainObject(arguments[0]) || _isString(arguments[0])))) {
       throw new Error('Invalid argument, initialize Devour with an object.')
     }
 
@@ -55,7 +69,7 @@ class JsonApi {
     }
 
     let deprecatedConstructors = (args) => {
-      return (args.length === 2 || (args.length === 1 && _.isString(args[0])))
+      return (args.length === 2 || (args.length === 1 && _isString(args[0])))
     }
 
     if (deprecatedConstructors(arguments)) {
@@ -65,7 +79,7 @@ class JsonApi {
       }
     }
 
-    options = _.defaultsDeep(options, defaults)
+    options = _defaultsDeep(options, defaults)
     let middleware = options.middleware
 
     this._originalMiddleware = middleware.slice(0)
@@ -87,7 +101,7 @@ class JsonApi {
     } else {
       this.pluralize = pluralize
     }
-    this.trailingSlash = options.trailingSlash === true ? _.forOwn(_.clone(defaults.trailingSlash), (v, k, o) => { _.set(o, k, true) }) : options.trailingSlash
+    this.trailingSlash = options.trailingSlash === true ? _forOwn(_clone(defaults.trailingSlash), (v, k, o) => { _set(o, k, true) }) : options.trailingSlash
     options.logger ? Logger.enable() : Logger.disable()
 
     if (deprecatedConstructors(arguments)) {
@@ -109,8 +123,20 @@ class JsonApi {
     return this
   }
 
-  relationships () {
-    this.builderStack.push({path: 'relationships'})
+  relationships (relationshipName) {
+    let lastRequest = _last(this.builderStack)
+    this.builderStack.push({ path: 'relationships' })
+    if (!relationshipName) return this
+
+    let modelName = _get(lastRequest, 'model')
+    if (!modelName) {
+      throw new Error('Relationships must be called with a preceeding model.')
+    }
+
+    let relationship = this.relationshipFor(modelName, relationshipName)
+
+    this.builderStack.push({ path: relationshipName, model: relationship.type })
+
     return this
   }
 
@@ -119,7 +145,7 @@ class JsonApi {
   }
 
   stackForResource () {
-    return _.hasIn(_.last(this.builderStack), 'id')
+    return _hasIn(_last(this.builderStack), 'id')
   }
 
   addSlash () {
@@ -127,7 +153,7 @@ class JsonApi {
   }
 
   buildPath () {
-    return _.map(this.builderStack, 'path').join('/')
+    return _map(this.builderStack, 'path').join('/')
   }
 
   buildUrl () {
@@ -152,12 +178,12 @@ class JsonApi {
   }
 
   post (payload, params = {}, meta = {}) {
-    let lastRequest = _.chain(this.builderStack).last()
+    let lastRequest = _last(this.builderStack)
 
     let req = {
       method: 'POST',
       url: this.urlFor(),
-      model: lastRequest.get('model').value(),
+      model: _get(lastRequest, 'model'),
       data: payload,
       params,
       meta
@@ -171,12 +197,12 @@ class JsonApi {
   }
 
   patch (payload, params = {}, meta = {}) {
-    let lastRequest = _.chain(this.builderStack).last()
+    let lastRequest = _last(this.builderStack)
 
     let req = {
       method: 'PATCH',
       url: this.urlFor(),
-      model: lastRequest.get('model').value(),
+      model: _get(lastRequest, 'model'),
       data: payload,
       params,
       meta
@@ -192,20 +218,26 @@ class JsonApi {
   destroy () {
     let req = null
 
-    if (arguments.length === 2) {
+    if (arguments.length >= 2) { // destroy (modelName, id, [payload], [meta])
+      const [model, id, data, meta] = [...arguments]
+
+      console.assert(model, 'No model specified')
+      console.assert(id, 'No ID specified')
       req = {
         method: 'DELETE',
-        url: this.urlFor({model: arguments[0], id: arguments[1]}),
-        model: arguments[0],
-        data: {}
+        url: this.urlFor({model, id}),
+        model: model,
+        data: data || {},
+        meta: meta || {}
       }
-    } else {
-      const lastRequest = _.chain(this.builderStack).last()
+    } else { // destroy ([payload])
+      // TODO: find a way to pass meta
+      const lastRequest = _last(this.builderStack)
 
       req = {
         method: 'DELETE',
         url: this.urlFor(),
-        model: lastRequest.get('model').value(),
+        model: _get(lastRequest, 'model'),
         data: arguments.length === 1 ? arguments[0] : {}
       }
 
@@ -237,7 +269,7 @@ class JsonApi {
   }
 
   replaceMiddleware (middlewareName, newMiddleware) {
-    let index = _.findIndex(this.middleware, ['name', middlewareName])
+    let index = _findIndex(this.middleware, ['name', middlewareName])
     this.middleware[index] = newMiddleware
   }
 
@@ -348,14 +380,25 @@ class JsonApi {
 
   modelFor (modelName) {
     if (!this.models[modelName]) {
-      throw new Error(`API resource definition for model "${modelName}" not found.`)
+      throw new Error(`API resource definition for model "${modelName}" not found. Available models: ${Object.keys(this.models)}`)
     }
 
     return this.models[modelName]
   }
 
+  relationshipFor (modelName, relationshipName) {
+    let model = this.modelFor(modelName)
+    let relationship = model.attributes[relationshipName]
+
+    if (!relationship) {
+      throw new Error(`API resource definition on model "${modelName}" for relationship "${relationshipName}" not found. Available attributes: ${Object.keys(model.attributes)}`)
+    }
+
+    return relationship
+  }
+
   collectionPathFor (modelName) {
-    let collectionPath = _.get(this.models[modelName], 'options.collectionPath') || this.pluralize(modelName)
+    let collectionPath = _get(this.models[modelName], 'options.collectionPath') || this.pluralize(modelName)
     return `${collectionPath}`
   }
 
@@ -377,9 +420,9 @@ class JsonApi {
   }
 
   urlFor (options = {}) {
-    if (!_.isUndefined(options.model) && !_.isUndefined(options.id)) {
+    if (!_isUndefined(options.model) && !_isUndefined(options.id)) {
       return this.resourceUrlFor(options.model, options.id)
-    } else if (!_.isUndefined(options.model)) {
+    } else if (!_isUndefined(options.model)) {
       return this.collectionUrlFor(options.model)
     } else {
       return this.buildUrl()
@@ -387,9 +430,9 @@ class JsonApi {
   }
 
   pathFor (options = {}) {
-    if (!_.isUndefined(options.model) && !_.isUndefined(options.id)) {
+    if (!_isUndefined(options.model) && !_isUndefined(options.id)) {
       return this.resourcePathFor(options.model, options.id)
-    } else if (!_.isUndefined(options.model)) {
+    } else if (!_isUndefined(options.model)) {
       return this.collectionPathFor(options.model)
     } else {
       return this.buildPath()

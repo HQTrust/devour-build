@@ -1,12 +1,12 @@
 const deserialize = require('./_deserialize')
-const _ = require('lodash')
+const _isArray = require('lodash/isArray')
 
 function needsDeserialization (method) {
   return ['GET', 'PATCH', 'POST'].indexOf(method) !== -1
 }
 
 function isCollection (responseData) {
-  return _.isArray(responseData)
+  return _isArray(responseData)
 }
 
 module.exports = {
@@ -34,6 +34,7 @@ module.exports = {
       } else if (res.data) {
         data = deserialize.resource.call(jsonApi, res.data, included)
       }
+      deserialize.cache.clear()
     }
 
     if (res.data && data) {
