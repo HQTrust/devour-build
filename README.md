@@ -284,3 +284,9 @@ let { data, errors, meta, links } = jsonApi.findAll('post')
 // => meta will be populated with any meta data returned by your API
 // => links will be populated with any document level links returned by your API
 ```
+
+### Release a new build version
+
+To make a new release, checkout https://github.com/HQTrust/devour on the master branch that has your fixes merged into it. Then, run `yarn prepublish` to compile a build version of the package on the checked out version of devour. Next, copy your lib folder containing your changes into this repository and push that changes to GitHub. You can push directly to `master`.
+
+Now, update all the projects using this custom build version of devour to use the newest version by updating the commit ID in the respective package.json.
